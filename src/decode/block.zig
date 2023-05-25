@@ -1,0 +1,235 @@
+const std = @import("std");
+
+const log = std.log.scoped(.lz4_block);
+
+pub const LZ4DecodeBlockError = error {
+	BadMatchOffset,
+	BadMatchLen,
+	SmallDest,
+	SmallInput,
+};
+
+// https://ticki.github.io/blog/how-lz4-works/
+pub const Token = packed struct { // packed structs go least to most significant
+	match_len: u4,
+	literal_len: u4,
+};
+// Optional extended token
+// literal: []const u8,
+pub const Offset = u16;
+// Optional extended offset
+
+inline fn readLength(len: u4, reader: anytype) !usize {
+	if (len != 15) {
+		return len;
+	}
+	var res: usize = len;
+
+	var last_read: u8 = try reader.readByte();
+	res += last_read;
+	while (last_read == 255) {
+		last_read = try reader.readByte();
+		res += last_read;
+	}
+
+	return res;
+}
+
+fn testReadLength(len: u4, src: []const u8) !usize {
+	var reader = std.io.fixedBufferStream(src);
+	return readLength(len, reader.reader());
+}
+
+test "literal length" {
+	try std.testing.expectEqual(@as(usize, 0), try testReadLength(0, &[_]u8{}));
+	try std.testing.expectEqual(@as(usize, 48), try testReadLength(15, &[_]u8{ 33 }));
+	try std.testing.expectEqual(@as(usize, 280), try testReadLength(15, &[_]u8{ 255, 10 }));
+	try std.testing.expectEqual(@as(usize, 15), try testReadLength(15, &[_]u8{ 0 }));
+}
+
+inline fn memcpy_wild(dest: []u8, src: []u8) void {
+	// Needed because @memcpy cannot alias.
+	std.debug.assert(dest.len == src.len);
+	for (0..src.len) |i| {
+		dest[i] = src[i];
+	}
+}
+
+pub fn decodeBlockStream(dest: []u8, dest_offset: usize, reader: anytype) !usize {
+	const token = try reader.readStruct(Token);
+	log.debug("token {any}", .{ token });
+
+	var literal_len = try readLength(token.literal_len, reader);
+	log.debug("literal len {d}", .{ literal_len });
+	if (literal_len > dest.len) {
+		log.err("literal len {d} greater than provided dest len {d}", .{ literal_len, dest.len });
+		return LZ4DecodeBlockError.SmallDest;
+	}
+
+	// Copy into destination buffer.
+	var literals = dest[dest_offset..dest_offset + literal_len];
+	const n_read = try reader.read(literals);
+	if (literal_len != n_read) {
+		log.warn("expected {d} literals but got {d}", .{ literal_len, n_read });
+		return n_read;
+	}
+
+	// Check for EOF
+	const neg_offset = reader.readIntLittle(Offset) catch |err| {
+		if (err == error.EndOfStream) return literal_len;
+		return err;
+	};
+	log.debug("neg_offset {d}", .{ neg_offset });
+	if (neg_offset == 0 or neg_offset > dest_offset + literals.len) {
+		log.err("offset {d} > dest_offset + literal len {d}", .{ neg_offset, dest_offset + literals.len });
+		return LZ4DecodeBlockError.BadMatchOffset;
+	}
+
+	// Append to destination buffer a single run from inside destination buffer.
+	const offset = dest_offset + literals.len - neg_offset;
+	const len = 4 + try readLength(token.match_len, reader);
+	// if (len > literals.len) {
+	// 	log.err("match len {d} greater than literal len {d}", .{ len, literals.len });
+	// 	return LZ4DecodeBlockError.BadMatchLen;
+	// }
+	// if (literal_len + len > dest.len) {
+	// 	log.err("literal len + match len {d} greater than provided dest len {d}",
+	// 		.{ literal_len + len, dest.len });
+	// 	return LZ4DecodeBlockError.SmallDest;
+	// }
+	log.debug("copy {d} to {d} len {d}", .{ offset, literals.len, len });
+
+	memcpy_wild(dest[dest_offset + literals.len..dest_offset + literals.len + len], dest[offset..offset + len]);
+
+	return literals.len + len;
+}
+
+pub fn decodeBlock(dest: []u8, src: []const u8) !usize {
+	var stream = std.io.fixedBufferStream(src);
+	var reader = stream.reader();
+
+	var res: usize = 0;
+	while (reader.context.pos < src.len) {
+		res += try decodeBlockStream(dest, res, reader);
+		log.debug("{d} {s}", .{ res, dest[0..res] });
+	}
+
+	return res;
+}
+
+fn testBlock(compressed: []const u8, comptime expected: []const u8) !void {
+	var dest: [expected.len]u8 = undefined;
+
+	const decoded_size = try decodeBlock(&dest, compressed);
+
+	try std.testing.expectEqual(@as(usize, expected.len), decoded_size);
+	try std.testing.expectEqualSlices(u8, expected, dest[0..decoded_size]);
+}
+
+test "no compression" {
+	// echo "asdf" | lz4 -c -i | hexdump -C
+	try testBlock("\x40asdf", "asdf");
+}
+
+test "small compression" {
+	// Go back 6 and copy (4 + 1) bytes
+	try testBlock("\xa10123456789\x06\x00", "012345678945678");
+}
+
+test "medium compression" {
+	// Go back 11 and copy (4 + 8) bytes
+	try testBlock(
+		"\xf7\x12this is longer than 15 characters\x0b\x00",
+		"this is longer than 15 characters characters",
+	);
+}
+
+test "large compression" {
+	const compressed = "\xf2\x57Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod\n" 
+		++ "tempor incididunt ut labore et[\x00\xf2;e magna aliqua. Ut enim ad minim\n" 
+		++ "veniam, quis nostrud exercitation ullamcoZ\x00\x00%\x00bisi utS\x00\xf2\x01ip ex ea\n" 
+		++ "commodo\xc1\x00pquat. DS\x00\xa2aute irure\x91\x00\xf0\x02 in reprehenderit\x11\x00\xb0voluptate\n" 
+		++ "v\xea\x00\xa4 esse cill\"\x01\xf0\x15e eu fugiat nulla pariatur. ExcepteuG\x01\xf0\x04nt occaecat\n" 
+		++ "cupidat2\x00\xa0on proidenF\x01\x00*\x01\x80in culpa\xf8\x00\xe0 officia deser\x1e\x00@moll\x93\x01\x00*\x01bid\n" 
+		++ "est\xfe\x00\x80um.\n" 
+		++ "\n" 
+		++ "Sed\xff\x00Ppersp7\x00\xf3\x0etis unde omnis iste natus err\xdd\x01\x05\xe1\x00\xe1m accusantium\n" 
+		++ "\xfe\x01\xa2emque laud\x16\x00\xf1\x01, totam rem aper\x9f\x01 ea%\x000ips\xb2\x00\xf0\x04ae ab illo inventor:\x01\x11r\xb2\x01\xf0\x10s et quasi architecto beatae vi\x06\x00Rdicta\x08\x01\xf1\x00explicabo. Nemo\x1d\x02\x10\n" 
+		++ "g\x00\x18m\xb4\x00Dquia\x10\x00\x12s\xae\x02@sper\xe6\x00\x80r aut od/\x01!ut\xa4\x01\x00d\x01 edZ\x01\x00\x17\x02\x01\x0f\x02 un*\x00\x00\x8b\x02\x12i\x07\x02`es eos$\x00! rg\x02\x14e`\x00\x00$\x01\x003\x00\xa0i nesciunt\x9b\x00\x90que\n" 
+		++ "porro3\x00\x91squam est\xb7\x02\x03Q\x00\x04R\x03\x01\xac\x00\x01Y\x01\x02\xa9\x00\x0cW\x03$,\n" 
+		++ "X\x03\x11 m\x02\x02W\x03\x016\x00rnon num^\x00\x92ius modi g\x03\x12ah\x03\x00\x1e\x02\x05f\x03\x1b\n" 
+		++ "f\x03\x12m\x14\x03 am\x80\x018era\xf8\x01\x0e{\x03(a |\x03\x12\n" 
+		++ "|\x03\x19m|\x03\"em~\x03Q corp}\x03ssuscipi\x90\x02kiosam,\x92\x03!d\n" 
+		++ "\x92\x03\x12 \x92\x03\x16i\x92\x03Tur? Q\x94\x03\x10m\xfe\x00` eum i\x9c\x03\n" 
+		++ "\x93\x03\x00~\x01 in\xd7\x03\x05\x9a\x03\x00/\x00\x04\x9a\x03\x01\xe3\x00\xf8\x00nihil molestiaeg\x00\x10,-\x00\x00\xa0\x02\x10u\n" 
+		++ "\x01\x14i\xe7\x02\x01n\x00\x03\xc5\x034quo\xf1\x01\x18s\xd2\x03Ptur?\n";
+	const expected = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod\n" 
+		++ "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim\n" 
+		++ "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea\n" 
+		++ "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate\n" 
+		++ "velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat\n" 
+		++ "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id\n" 
+		++ "est laborum.\n" 
+		++ "\n" 
+		++ "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium\n" 
+		++ "doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore\n" 
+		++ "veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim\n" 
+		++ "ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia\n" 
+		++ "consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque\n" 
+		++ "porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur,\n" 
+		++ "adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore\n" 
+		++ "et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis\n" 
+		++ "nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid\n" 
+		++ "ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea\n" 
+		++ "voluptate velit esse quam nihil molestiae consequatur, vel illum qui\n" 
+		++ "dolorem eum fugiat quo voluptas nulla pariatur?\n";
+	try testBlock(compressed, expected);
+}
+
+test "multiple blocks" {
+	// Go back 6 and copy (4 + 3) bytes
+	try testBlock(
+		"\xb3Hello there\x06\x00\xf0\x12I am a sentence to be compressed.",
+		"Hello there there I am a sentence to be compressed."
+	);
+
+	// Go back 6 and copy (4 + 3) bytes
+	// Go back 17 and copy 18 bytes.
+	try testBlock(
+		"\xb3Hello there\x06\x00\xf8\x11I am a sentence to be compressed\x11\x00\x50essed",
+		"Hello there there I am a sentence to be compressed to be compressed"
+	);
+}
+
+test "input ends prematurely" {
+	// Should this error? Seems nice to do our best and warn.
+	const compressed = "\x90Not 9";
+	const expected = "Not 9";
+	var dest: [10]u8 = undefined; // Oversized because we check for len 9
+
+	const decoded_size = try decodeBlock(&dest, compressed);
+
+	try std.testing.expectEqual(@as(usize, expected.len), decoded_size);
+	try std.testing.expectEqualSlices(u8, expected, dest[0..decoded_size]);
+}
+
+fn testError(compressed: []const u8, comptime expected: anyerror) !void {
+	var dest: [4096]u8 = undefined;
+	try std.testing.expectError(expected, decodeBlock(&dest, compressed));
+}
+
+test "garbage input" {
+	// try testError("Hello there", LZ4DecodeBlockError.BadMatchOffset);
+	std.testing.log_level = .debug;
+
+	// try testError(, LZ4DecodeBlockError.BadMatchOffset);
+}
+
+test "small buffer" {
+	var dest: [4]u8 = undefined;
+	try std.testing.expectError(LZ4DecodeBlockError.SmallDest, decodeBlock(&dest, "this is longer than 4"));
+}
+
+test "premature end" {
+	// try testError("\xb3Hello there\x06", LZ4DecodeBlockError.BadMatchOffset);
+}
