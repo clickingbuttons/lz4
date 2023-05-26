@@ -22,8 +22,18 @@ pub const Frame = struct {
 				}
 			};
 			pub const BlockDescriptor = packed struct {
+				pub const MaxSize = enum(u3) {
+					NA0,
+					NA1,
+					NA2,
+					NA3,
+					_64KB,
+					_256KB,
+					_1MB,
+					_4MB,
+				};
 				_reserved2: u4,
-				block_maxsize: u3,
+				block_maxsize: MaxSize,
 				_reserved1: bool,
 				comptime {
 					std.debug.assert(@sizeOf(@This()) == 1);
