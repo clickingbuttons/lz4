@@ -59,7 +59,7 @@ pub const Frame = struct {
 		pub const DataBlock = packed struct {
 			block_size: u31,
 			uncompressed: bool,
-			// block data
+			// block data ([block_size]u8)
 			// optional checksum (u32)
 		};
 

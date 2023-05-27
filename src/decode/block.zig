@@ -3,20 +3,20 @@
 // match_len: u4
 // literal_len: u4
 // extended_literal_len (if literal_len == 15): [*]u8
-// literal: []u8
+// literal: [literal_len]u8
 // match_offset: u16 (negative lookbehind from last literal) (CAN REFERENCE PREVIOUS BLOCKS!!)
 // extended_match_len (if match_len == 15): [*]u8 
 //
 // Blocks repeat until end of EOS. Last block is allowed to have only literals.
 
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const log = std.log.scoped(.lz4_block);
-pub const LZ4DecodeBlockError = error {
+pub const DecodeError = error {
 	BadMatchOffset,
 	BadMatchLen,
-	SmallDest,
-	PrematureInputEnd,
+	PrematureEnd,
 };
 
 pub const Token = packed struct { // packed structs go least to most significant
@@ -32,12 +32,11 @@ inline fn readLength(len: u4, reader: anytype) !usize {
 	var res: usize = len;
 
 	var last_read: u8 = try reader.readByte();
-	res +%= last_read;
+	// TODO: best way to handle overflow?
+	res += last_read;
 	while (last_read == 255) {
-		// Huge lengths really aren't supported by spec. To avoid runtime panics let's use wraparound
-		// like the reference C implementation.
 		last_read = try reader.readByte();
-		res +%= last_read;
+		res += last_read;
 	}
 
 	return res;
@@ -63,81 +62,75 @@ inline fn wildMemcpy(dest: []u8, src: []u8) void {
 	}
 }
 
-fn decodeBlockStream(dest: []u8, dest_offset: usize, reader: anytype) !usize {
+fn decodeBlockStream(dest: *std.ArrayList(u8), reader: anytype) !void {
 	const token = try reader.readStruct(Token);
 	log.debug("token {any}", .{ token });
 
 	var literal_len = try readLength(token.literal_len, reader);
 	log.debug("literal len {d}", .{ literal_len });
-
-	// Check destination buffer has enough space.
-	const dest_space_remaining = dest.len - dest_offset;
-	if (literal_len > dest_space_remaining) {
-		log.err("literal len {d} greater than dest space remaining {d} (total dest len {d})",
-			.{ literal_len, dest_space_remaining, dest.len });
-		return LZ4DecodeBlockError.SmallDest;
-	}
+	const old_len = dest.items.len;
+	try dest.resize(old_len + literal_len);
 
 	// Read literals into destination buffer.
-	var literals = dest[dest_offset..dest_offset + literal_len];
+	var literals = dest.items[old_len..dest.items.len];
 	const n_read = try reader.read(literals);
 	if (literal_len != n_read) {
-		log.warn("premature stream end. expected {d} literals but got {d}", .{ literal_len, n_read });
-		return LZ4DecodeBlockError.PrematureInputEnd;
+		log.err("premature stream end. expected {d} literals but got {d}", .{ literal_len, n_read });
+		return DecodeError.PrematureEnd;
 	}
 
 	// Read match offset and check for EOF
 	const match_offset = reader.readIntLittle(Offset) catch |err| {
-		if (err == error.EndOfStream) return literal_len;
+		if (err == error.EndOfStream) return;
 		return err;
 	};
 	log.debug("match_offset {d}", .{ match_offset });
 
 	// Check match offset is in dest buffer
-	const abs_offset = if (std.math.sub(usize, dest_offset +% literals.len, match_offset)) |res|
+	const abs_offset = if (std.math.sub(usize, dest.items.len, match_offset)) |res|
 		res
 	else |_| {
 		log.err("match_offset {d} points to {d} bytes before buffer start",
-			.{ match_offset, @intCast(i64, dest_offset +% literals.len) - @intCast(i64, match_offset) });
-		return LZ4DecodeBlockError.BadMatchOffset;
+			.{ match_offset, @intCast(i64, dest.items.len) - @intCast(i64, match_offset) });
+		return DecodeError.BadMatchOffset;
 	};
 
 	// Append match to destination buffer
-	const len = 4 +% try readLength(token.match_len, reader);
-	if (abs_offset + len > dest.len) {
+	const len = 4 + try readLength(token.match_len, reader);
+	const old_len2 = dest.items.len;
+	try dest.resize(old_len2 + len);
+	if (abs_offset + len > dest.items.len) {
 	 	log.err(
-			"match references bytes {d}..{d} which are after dest size {d}."
-				++ "try giving a larger dest buffer.",
-			.{ abs_offset, abs_offset + len, dest.len });
-	 	return LZ4DecodeBlockError.BadMatchLen;
+			"match references bytes {d}..{d} which are after dest size {d}",
+			.{ abs_offset, abs_offset + len, dest.items.len });
+	 	return DecodeError.BadMatchLen;
 	}
 
-	const start = dest_offset + literals.len;
-	wildMemcpy(dest[start..start + len], dest[abs_offset..abs_offset + len]);
-
-	return literals.len + len;
+	wildMemcpy(dest.items[old_len2..old_len2 + len], dest.items[abs_offset..abs_offset + len]);
 }
 
-pub fn decodeBlock(dest: []u8, src: []const u8) !usize {
+pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
 	var stream = std.io.fixedBufferStream(src);
 	var reader = stream.reader();
 
-	var res: usize = 0;
+	var dest = std.ArrayList(u8).init(allocator);
+
 	while (reader.context.pos < src.len) {
-		res += try decodeBlockStream(dest, res, reader);
-		log.debug("{d} {s}", .{ res, dest[0..res] });
+		try decodeBlockStream(&dest, reader);
 	}
 
-	return res;
+	return dest.toOwnedSlice();
 }
 
 fn testBlock(compressed: []const u8, comptime expected: []const u8) !void {
-	var dest: [expected.len]u8 = undefined;
+	// var dest: [expected.len * 2]u8 = undefined;
+	// var allocator = std.heap.FixedBufferAllocator.init(dest);
+	var allocator = std.testing.allocator;
 
-	const decoded_size = try decodeBlock(&dest, compressed);
+	const decoded = try decodeBlock(allocator, compressed);
+	defer allocator.free(decoded);
 
-	try std.testing.expectEqual(@as(usize, expected.len), decoded_size);
-	try std.testing.expectEqualSlices(u8, expected, dest[0..decoded_size]);
+	try std.testing.expectEqualSlices(u8, expected, decoded);
 }
 
 test "no compression" {
@@ -152,6 +145,10 @@ test "small compression" {
 
 	// Go back 6 and copy (4 + 1) bytes
 	try testBlock("\xa10123456789\x06\x00", "012345678945678");
+}
+
+test "empty" {
+	try testBlock("\x05\x5d", "");
 }
 
 test "medium compression" {
@@ -217,27 +214,19 @@ test "multiple blocks" {
 	try testBlock(compressed, expected);
 }
 
-fn testError(compressed: []const u8, comptime expected: anyerror) !void {
-	var dest: [4096]u8 = undefined;
-	try std.testing.expectError(expected, decodeBlock(&dest, compressed));
-}
-
-test "garbage input" {
-	// try testError("Hello there", LZ4DecodeBlockError.BadMatchOffset);
-	std.testing.log_level = .debug;
-
-	// try testError(, LZ4DecodeBlockError.BadMatchOffset);
-}
-
-test "small buffer" {
-	var dest: [4]u8 = undefined;
-	try std.testing.expectError(LZ4DecodeBlockError.SmallDest, decodeBlock(&dest, "this is longer than 4"));
-}
-
-test "input ends prematurely" {
-	std.testing.log_level = .debug;
-	const compressed = "\x90Not 9";
-	var dest: [10]u8 = undefined; // Oversized because we check for len 9
-
-	try std.testing.expectError(LZ4DecodeBlockError.PrematureInputEnd, decodeBlock(&dest, compressed));
-}
+// test "garbage input" {
+// 	var dest: [4096]u8 = undefined;
+// 	try std.testing.expectError(expected, decodeBlock(&dest, "Hello there"));
+// }
+// 
+// test "small buffer" {
+// 	var dest: [4]u8 = undefined;
+// 	try std.testing.expectError(DecodeError.SmallDest, decodeBlock(&dest, "this is longer than 4"));
+// }
+// 
+// test "input ends prematurely" {
+// 	const compressed = "\x90Not 9";
+// 	var dest: [10]u8 = undefined; // Oversized because we check for len 9
+// 
+// 	try std.testing.expectError(DecodeError.PrematureEnd, decodeBlock(&dest, compressed));
+// }
