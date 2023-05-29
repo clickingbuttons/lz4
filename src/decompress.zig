@@ -5,7 +5,7 @@ const frame = @import("./decode/frame.zig");
 const log = std.log.scoped(.lz4_decompress);
 
 pub const DecompressStreamOptions = struct {
-	verify_checksum: bool = true,
+	verify_checksums: bool = true,
 };
 
 pub fn DecompressStream(
@@ -16,19 +16,22 @@ pub fn DecompressStream(
 		const Self = @This();
 
 		allocator: std.mem.Allocator,
-		reader: ReaderType,
+		source: ReaderType,
 
 		header: ?frame.FrameHeader,
 		data: []u8,
 		offset: usize,
 
-		pub const Error = ReaderType.Error || block.DecodeError || frame.DecodeError; 
+		pub const Error = ReaderType.Error || block.DecodeError || frame.DecodeError || error {
+			EndOfStream,
+			OutOfMemory
+		}
 		pub const Reader = std.io.Reader(*Self, Error, read);
 
-		pub fn init(allocator: std.mem.Allocator, reader: ReaderType) Self {
+		pub fn init(allocator: std.mem.Allocator, source: ReaderType) Self {
 			return .{
 				.allocator = allocator,
-				.reader = reader,
+				.source = source,
 				.header = null,
 				.data = &.{},
 				.offset = 0,
@@ -43,26 +46,25 @@ pub fn DecompressStream(
 			return .{ .context = self };
 		}
 
-		fn read2(self: *Self, buffer: []u8) Error!usize {
-			const old_offset = self.offset;
-			if (self.offset < self.data.len) {
-				// We have data ready to write
-				const len = @min(buffer.len, self.data.len - self.offset);
-				@memcpy(buffer, self.data[self.offset..self.offset + len]);
-				self.offset += buffer.len;
-			}
-			if (self.data.len - self.offset >= buffer.len) {
-			}
-			self.data = try frame.readFrame(self.allocator, reader, self.options.verify_checksums);
-		}
-
 		pub fn read(self: *Self, buffer: []u8) Error!usize {
 			if (buffer.len == 0) return 0;
 
-			while (true) {
-				const size = try self.read2(buffer);
-				if (size > 0) return size;
+			var len: usize = 0;
+			if (self.offset < self.data.len) {
+				len = @min(buffer.len, self.data.len - self.offset);
+				@memcpy(buffer[0..len], self.data[self.offset..self.offset + len]);
+				self.offset += len;
 			}
+
+			if (buffer.len > len) {
+				self.data = frame.decodeFrame(self.allocator, self.source, options.verify_checksums) catch |err| {
+					if (err == error.EndOfStream and len > 0) return len;
+					return err;
+				};
+				return try self.read(buffer[len..]);
+			}
+
+			return len;
 		}
 	};
 }
@@ -80,4 +82,29 @@ pub fn decompressStream(
 	reader: anytype,
 ) DecompressStream(@TypeOf(reader), .{}) {
 	return DecompressStream(@TypeOf(reader), .{}).init(allocator, reader);
+}
+
+fn testDecompress(comptime fname: []const u8) !void {
+	const allocator = std.testing.allocator;
+	const expected = try std.fs.cwd().readFileAlloc(allocator, fname, 1_000_000);
+	defer allocator.free(expected);
+
+	var file = try std.fs.cwd().openFile(fname ++ ".lz4", .{});
+	var reader = file.reader();
+	var stream = decompressStream(std.testing.allocator, reader);
+	defer stream.deinit();
+	var lz4reader = stream.reader();
+	var buf: []u8 = try allocator.alloc(u8, expected.len * 4);
+	defer allocator.free(buf);
+	const res = try lz4reader.read(buf);
+	try std.testing.expectEqual(@as(usize, expected.len), res);
+	try std.testing.expectEqualStrings(expected, buf[0..expected.len]);
+}
+
+test "decompress small" {
+	try testDecompress("./testdata/small.txt");
+}
+
+test "decompress large" {
+	try testDecompress("./testdata/lorem.txt");
 }

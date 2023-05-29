@@ -163,7 +163,7 @@ fn readDataBlock(
 	return decompressed;
 }
 
-pub fn readFrame(allocator: Allocator, reader: anytype, comptime verify_checksums: bool) ![]u8 {
+pub fn decodeFrame(allocator: Allocator, reader: anytype, comptime verify_checksums: bool) ![]u8 {
 	switch (try readFrameHeader(reader, verify_checksums)) {
 		.skippable => |header| {
 			try reader.skipBytes(header.frame_size, .{});
@@ -200,7 +200,7 @@ test "read frame" {
 
 	var stream = std.io.fixedBufferStream(src);
 	var reader = stream.reader();
-	const decompressed = try readFrame(allocator, reader, true);
+	const decompressed = try decodeFrame(allocator, reader, true);
 	defer allocator.free(decompressed);
 
 	try std.testing.expectEqualSlices(u8, expected, decompressed);

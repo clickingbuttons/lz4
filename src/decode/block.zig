@@ -114,6 +114,7 @@ pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
 	var reader = stream.reader();
 
 	var dest = std.ArrayList(u8).init(allocator);
+	errdefer dest.deinit();
 
 	while (reader.context.pos < src.len) {
 		try decodeBlockStream(&dest, reader);
@@ -214,19 +215,16 @@ test "multiple blocks" {
 	try testBlock(compressed, expected);
 }
 
-// test "garbage input" {
-// 	var dest: [4096]u8 = undefined;
-// 	try std.testing.expectError(expected, decodeBlock(&dest, "Hello there"));
-// }
-// 
-// test "small buffer" {
-// 	var dest: [4]u8 = undefined;
-// 	try std.testing.expectError(DecodeError.SmallDest, decodeBlock(&dest, "this is longer than 4"));
-// }
-// 
-// test "input ends prematurely" {
-// 	const compressed = "\x90Not 9";
-// 	var dest: [10]u8 = undefined; // Oversized because we check for len 9
-// 
-// 	try std.testing.expectError(DecodeError.PrematureEnd, decodeBlock(&dest, compressed));
-// }
+test "garbage input" {
+	try std.testing.expectError(
+		DecodeError.BadMatchOffset,
+		decodeBlock(std.testing.allocator, "Hello there")
+	);
+}
+
+test "input ends prematurely" {
+	try std.testing.expectError(
+		DecodeError.PrematureEnd,
+		decodeBlock(std.testing.allocator, "\x90Not 9")
+	);
+}
