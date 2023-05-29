@@ -11,6 +11,11 @@ pub fn build(b: *std.Build) void {
 		.optimize = optimize,
 	});
 	b.installArtifact(lib);
+	// Expose to dependents
+	_ = b.addModule("lz4", .{
+		.source_file =  .{ .path = "src/lib.zig" },
+		.dependencies = &.{},
+	});
 
 	const unit_tests = b.addTest(.{
 		.root_source_file = .{ .path = "src/lib.zig" },
