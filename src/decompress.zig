@@ -25,7 +25,7 @@ pub fn DecompressStream(
 		pub const Error = ReaderType.Error || block.DecodeError || frame.DecodeError || error {
 			EndOfStream,
 			OutOfMemory
-		}
+		};
 		pub const Reader = std.io.Reader(*Self, Error, read);
 
 		pub fn init(allocator: std.mem.Allocator, source: ReaderType) Self {

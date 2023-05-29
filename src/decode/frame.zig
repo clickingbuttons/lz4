@@ -193,8 +193,16 @@ pub fn decodeFrame(allocator: Allocator, reader: anytype, comptime verify_checks
 }
 
 test "read frame" {
-	const src = @embedFile("./testdata/small.txt.lz4");
-	const expected = @embedFile("./testdata/small.txt");
+	const src = [_]u8 {0x04,0x22,0x4d,0x18} // magic
+		++ [_]u8{0x7c,0x40,0x34,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x88} // frame descriptor
+		++ [_]u8{0x32,0x00,0x00,0x00} // data block length
+		++ "\xb3Hello there\x06\x00" // data block
+		++ "\xf0\x13I am a sentence to be compressed\x2e\x0a"
+		++ [_]u8 {0x0f, 0x60,0x99,0x2b} // data block checksum
+		++ [_]u8 {0x00,0x00,0x00,0x00} // end mark
+		++ [_]u8 {0x0d,0xcd,0xd5,0x32} // content checksum
+	;
+	const expected = "Hello there there I am a sentence to be compressed.\n";
 
 	const allocator = std.testing.allocator;
 
