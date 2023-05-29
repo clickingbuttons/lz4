@@ -36,7 +36,7 @@ type makes decoding frame streams easy.
 You can wrap an existing reader using `decompressStream`.
 
 ```zig
-const lz4 = @import("lz4/lib.zig");
+const lz4 = @import("lz4");
 
 const allocator = std.heap.page_allocator;
 var file = try std.fs.cwd().openFile("file.lz4", .{});
@@ -55,19 +55,23 @@ std.debug.print("{s}", .{ buf[0..res] });
 
 ### Frame
 ```zig
+const lz4 = @import("lz4");
+
 const allocator = std.heap.page_allocator;
 var file = try std.fs.cwd().openFile("frame.lz4", .{});
 
-const decompressed = try decodeFrame(allocator, reader, true);
+const decompressed = try lz4.decodeFrame(allocator, reader, true);
 defer allocator.free(decompressed);
 ```
 
 ### Block
 ```zig
+const lz4 = @import("lz4");
+
 const allocator = std.heap.page_allocator;
 const compressed = "\xf7\x12this is longer than 15 characters\x0b\x00";
 
-const decoded = try decodeBlock(allocator, compressed);
+const decoded = try lz4.decodeBlock(allocator, compressed);
 defer allocator.free(decoded);
 std.log.debug("{s}\n", .{ decoded }); // this is longer than 15 characters characters 
 ```
