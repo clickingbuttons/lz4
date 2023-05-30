@@ -249,3 +249,19 @@ test "read two frames" {
 
 	try std.testing.expectEqualSlices(u8, expected, decompressed);
 }
+
+test "bad frames don't leak memory" {
+	const src = [_]u8{0x04, 0x22, 0x4d, 0x18} // magic
+		++ [_]u8{0x64, 0x40, 0xa7} // frame descriptor
+		++ [_]u8{0x20, 0x00, 0x00, 0x80} // data block length (32)
+		++ "This is something longer than 32 bytes which will cause problems"
+		++ [_]u8{0x0, 0x0, 0x0, 0x0} // end mark
+		++ [_]u8{0x03, 0xa5, 0x58, 0xf6} // content checksum (incorrect)
+	;
+
+	const allocator = std.testing.allocator;
+
+	var stream = std.io.fixedBufferStream(src);
+	var reader = stream.reader();
+	try std.testing.expectError(error.BadMatchOffset, decodeFrame(allocator, reader, true));
+}

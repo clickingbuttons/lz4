@@ -23,7 +23,6 @@ pub fn DecompressStream(
 		offset: usize,
 
 		pub const Error = ReaderType.Error || block.DecodeError || frame.DecodeError || error {
-			EndOfStream,
 			OutOfMemory
 		};
 		pub const Reader = std.io.Reader(*Self, Error, read);
@@ -58,8 +57,32 @@ pub fn DecompressStream(
 
 			if (buffer.len > len) {
 				self.data = frame.decodeFrame(self.allocator, self.source, options.verify_checksums) catch |err| {
-					if (err == error.EndOfStream and len > 0) return len;
-					return err;
+					return switch (err) {
+						error.AccessDenied => Error.AccessDenied,
+						error.BadEndMagic => Error.BadEndMagic,
+						error.BadMatchLen => Error.BadMatchLen,
+						error.BadMatchOffset => Error.BadMatchOffset,
+						error.BadStartMagic => Error.BadStartMagic,
+						error.BrokenPipe => Error.BrokenPipe,
+						error.ChecksumMismatch => Error.ChecksumMismatch,
+						error.ConnectionResetByPeer => Error.ConnectionResetByPeer,
+						error.ConnectionTimedOut => Error.ConnectionTimedOut,
+						error.DictionaryUnsupported => Error.DictionaryUnsupported,
+						error.EndOfStream => len, // End of stream is OK
+						error.InputOutput => Error.InputOutput,
+						error.InvalidMaxSize => Error.InvalidMaxSize,
+						error.InvalidVersion => Error.InvalidVersion,
+						error.IsDir => Error.IsDir,
+						error.NetNameDeleted => Error.NetNameDeleted,
+						error.NotOpenForReading => Error.NotOpenForReading,
+						error.OperationAborted => Error.OperationAborted,
+						error.OutOfMemory => Error.OutOfMemory,
+						error.PrematureEnd => Error.PrematureEnd,
+						error.ReservedBitSet => Error.ReservedBitSet,
+						error.SystemResources => Error.SystemResources,
+						error.Unexpected => Error.Unexpected,
+						error.WouldBlock => Error.WouldBlock,
+					};
 				};
 				return try self.read(buffer[len..]);
 			}
