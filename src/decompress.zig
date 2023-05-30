@@ -55,32 +55,8 @@ pub fn DecompressStream(
 
             if (buffer.len > len) {
                 self.data = frame.decodeFrame(self.allocator, self.source, options.verify_checksums) catch |err| {
-                    return switch (err) {
-                        error.AccessDenied => Error.AccessDenied,
-                        error.BadEndMagic => Error.BadEndMagic,
-                        error.BadMatchLen => Error.BadMatchLen,
-                        error.BadMatchOffset => Error.BadMatchOffset,
-                        error.BadStartMagic => Error.BadStartMagic,
-                        error.BrokenPipe => Error.BrokenPipe,
-                        error.ChecksumMismatch => Error.ChecksumMismatch,
-                        error.ConnectionResetByPeer => Error.ConnectionResetByPeer,
-                        error.ConnectionTimedOut => Error.ConnectionTimedOut,
-                        error.DictionaryUnsupported => Error.DictionaryUnsupported,
-                        error.EndOfStream => len, // End of stream is OK
-                        error.InputOutput => Error.InputOutput,
-                        error.InvalidMaxSize => Error.InvalidMaxSize,
-                        error.InvalidVersion => Error.InvalidVersion,
-                        error.IsDir => Error.IsDir,
-                        error.NetNameDeleted => Error.NetNameDeleted,
-                        error.NotOpenForReading => Error.NotOpenForReading,
-                        error.OperationAborted => Error.OperationAborted,
-                        error.OutOfMemory => Error.OutOfMemory,
-                        error.PrematureEnd => Error.PrematureEnd,
-                        error.ReservedBitSet => Error.ReservedBitSet,
-                        error.SystemResources => Error.SystemResources,
-                        error.Unexpected => Error.Unexpected,
-                        error.WouldBlock => Error.WouldBlock,
-                    };
+                    if (err == error.EndOfStream) return len;
+                    return @errSetCast(Error, err);
                 };
                 return try self.read(buffer[len..]);
             }

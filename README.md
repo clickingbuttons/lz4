@@ -9,13 +9,13 @@ type makes decoding frame streams easy.
 `build.zig.zon`
 ```zig
 .{
-	.name = "test",
+	.name = "yourProject",
 	.version = "0.0.1",
 
 	.dependencies = .{
 		.lz4 = .{
 			.url = "https://github.com/clickingbuttons/lz4/archive/refs/heads/master.tar.gz",
-			.hash = "1220ba841473bb16970a3c8ed4f450d2b67c3d4f59778bae37162c49da74520d5c53",
+			.hash = "1220bd2264e4b165f37b32ae458ff7a1b64e47d426feaf4b8276cb8458b8161d8160",
 		},
 	},
 }
@@ -26,7 +26,6 @@ type makes decoding frame streams easy.
 		.target = target,
 		.optimize = optimize,
 	});
-	exe.linkLibrary(lz4.artifact("lz4")); // Static
 	exe.addModule("lz4", lz4.module("lz4"));
 ```
 
