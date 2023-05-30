@@ -86,7 +86,7 @@ pub fn decompressStream(
 
 fn testDecompress(comptime fname: []const u8) !void {
 	const allocator = std.testing.allocator;
-	const expected = try std.fs.cwd().readFileAlloc(allocator, fname, 1_000_000);
+	const expected = try std.fs.cwd().readFileAlloc(allocator, fname, 1_000_000_000);
 	defer allocator.free(expected);
 
 	var file = try std.fs.cwd().openFile(fname ++ ".lz4", .{});

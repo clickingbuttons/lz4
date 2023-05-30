@@ -1,0 +1,1 @@
+This is more than 32 bytes which will make it into three frames with `lz4 -B32`.

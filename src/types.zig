@@ -5,8 +5,7 @@ pub const Frame = struct {
 
 	pub const LZ4 = struct {
 		pub const Magic = u32;
-		pub const magic_start: Magic = 0x184D2204;
-		pub const magic_end: Magic = 0x0;
+		pub const magic: Magic = 0x184D2204;
 
 		pub const Header = packed struct { // packed structs go least to most significant
 			pub const Descriptor = packed struct {

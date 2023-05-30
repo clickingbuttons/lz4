@@ -123,6 +123,17 @@ pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
 	return dest.toOwnedSlice();
 }
 
+pub fn decodeBlockArrayList(dest: *std.ArrayList(u8), src: []const u8) !usize {
+	var stream = std.io.fixedBufferStream(src);
+	var reader = stream.reader();
+
+	while (reader.context.pos < src.len) {
+		try decodeBlockStream(dest, reader);
+	}
+
+	return dest.items.len;
+}
+
 fn testBlock(compressed: []const u8, comptime expected: []const u8) !void {
 	// var dest: [expected.len * 2]u8 = undefined;
 	// var allocator = std.heap.FixedBufferAllocator.init(dest);
