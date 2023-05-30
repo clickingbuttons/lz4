@@ -10,7 +10,7 @@ pub const decodeBlock = block.decodeBlock;
 pub const decodeBlockArrayList = block.decodeBlockArrayList;
 
 test {
-	_ = @import("./decode/block.zig");
-	_ = @import("./decode/frame.zig");
-	_ = @import("./decompress.zig");
+    _ = @import("./decode/block.zig");
+    _ = @import("./decode/frame.zig");
+    _ = @import("./decompress.zig");
 }
