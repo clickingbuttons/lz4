@@ -230,15 +230,15 @@ test "read two frames" {
 	const src = [_]u8{0x04, 0x22, 0x4d, 0x18} // magic
 		++ [_]u8{0x64, 0x40, 0xa7} // frame descriptor
 		++ [_]u8{0x20, 0x00, 0x00, 0x80} // data block length (32)
-		++ "This is more than 32 bytes which"
+		++ "This is more than 64 bytes which"
 		++ [_]u8{0x20, 0x00, 0x00, 0x80} // data block length (32)
 		++ " will make it into three frames "
 		++ [_]u8{0x11, 0x00, 0x00, 0x80} // data block length (17)
 		++ "with `lz4 -B32`.\x0a"
 		++ [_]u8{0x0, 0x0, 0x0, 0x0} // end mark
-		++ [_]u8{0x9e, 0xdb, 0x49, 0x4e} // content checksum
+		++ [_]u8{0x03, 0xa5, 0x58, 0xf6} // content checksum
 	;
-	const expected = "This is more than 32 bytes which will make it into three frames with `lz4 -B32`.\n";
+	const expected = "This is more than 64 bytes which will make it into three frames with `lz4 -B32`.\n";
 
 	const allocator = std.testing.allocator;
 
