@@ -4,14 +4,7 @@ pub fn build(b: *std.Build) void {
 	const target = b.standardTargetOptions(.{});
 	const optimize = b.standardOptimizeOption(.{});
 
-	const lib = b.addStaticLibrary(.{
-		.name = "lz4",
-		.root_source_file = .{ .path = "src/lib.zig" },
-		.target = target,
-		.optimize = optimize,
-	});
-	b.installArtifact(lib);
-	// Expose to dependents
+	// Expose to zig dependents
 	_ = b.addModule("lz4", .{
 		.source_file =  .{ .path = "src/lib.zig" },
 		.dependencies = &.{},
