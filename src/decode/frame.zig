@@ -34,12 +34,12 @@ inline fn frameType(magic: Frame.LZ4.Magic) DecodeError!Frame.Kind {
         return .skippable;
     }
 
-    log.err("invalid start magic {x}", .{magic});
+    log.err("invalid start magic {x}, expected {x} or skippable magic", .{ magic, Frame.LZ4.magic });
     return DecodeError.BadStartMagic;
 }
 
 fn headerChecksum(src: []const u8) u8 {
-    const hash = Hasher.hash(src);
+    const hash = Hasher.hash(0, src);
     return @truncate(u8, hash >> 8);
 }
 
@@ -117,7 +117,7 @@ fn readFrameHeader(reader: anytype, comptime verify_checksums: bool) !FrameHeade
 fn readDataBlockChecksum(reader: anytype, data: []const u8, comptime verify_checksums: bool) !void {
     const expected_checksum = try reader.readIntLittle(u32);
     if (verify_checksums) {
-        const actual_checksum = Hasher.hash(data);
+        const actual_checksum = Hasher.hash(0, data);
         if (expected_checksum != actual_checksum) {
             log.warn("expected block checksum {x}, got {x}", .{ expected_checksum, actual_checksum });
             return DecodeError.ChecksumMismatch;
@@ -192,7 +192,7 @@ pub fn decodeFrame(allocator: Allocator, reader: anytype, comptime verify_checks
 
             if (header.descriptor.content_checksum and verify_checksums) {
                 const expected_checksum = try reader.readIntLittle(u32);
-                const actual_checksum = Hasher.hash(decoded.items);
+                const actual_checksum = Hasher.hash(0, decoded.items);
                 if (expected_checksum != actual_checksum) {
                     log.warn("expected content checksum {x} from frame, got {x}", .{ expected_checksum, actual_checksum });
                     return DecodeError.ChecksumMismatch;

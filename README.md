@@ -15,7 +15,7 @@ type makes decoding frame streams easy.
 	.dependencies = .{
 		.lz4 = .{
 			.url = "https://github.com/clickingbuttons/lz4/archive/refs/heads/master.tar.gz",
-			.hash = "1220bd2264e4b165f37b32ae458ff7a1b64e47d426feaf4b8276cb8458b8161d8160",
+			.hash = "run `zig build` and then copy its expected hash here",
 		},
 	},
 }
@@ -72,5 +72,5 @@ const compressed = "\xf7\x12this is longer than 15 characters\x0b\x00";
 
 const decoded = try lz4.decodeBlock(allocator, compressed);
 defer allocator.free(decoded);
-std.log.debug("{s}\n", .{ decoded }); // this is longer than 15 characters characters 
+std.log.debug("{s}\n", .{ decoded }); // this is longer than 15 characters characters
 ```
