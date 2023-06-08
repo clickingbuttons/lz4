@@ -15,7 +15,7 @@ type makes decoding frame streams easy.
 	.dependencies = .{
 		.lz4 = .{
 			.url = "https://github.com/clickingbuttons/lz4/archive/refs/heads/master.tar.gz",
-			.hash = "run `zig build` and then copy its expected hash here",
+			.hash = "",
 		},
 	},
 }
