@@ -5,6 +5,8 @@ Implementation of LZ4 decompression for
 [frame](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md) formats in Zig. Added reader
 type makes decoding frame streams easy.
 
+Last built with zig@0.11.0-dev.3937+78eb3c561
+
 ## Installation
 `build.zig.zon`
 ```zig
