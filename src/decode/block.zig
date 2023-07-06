@@ -90,7 +90,10 @@ fn decodeBlockStream(dest: *std.ArrayList(u8), reader: anytype) !void {
     const abs_offset = if (std.math.sub(usize, dest.items.len, match_offset)) |res|
         res
     else |_| {
-        log.err("match_offset {d} points to {d} bytes before buffer start", .{ match_offset, @intCast(i64, dest.items.len) - @intCast(i64, match_offset) });
+        log.err("match_offset {d} points to {d} bytes before buffer start", .{
+            match_offset,
+            @as(i64, @intCast(dest.items.len)) - @as(i64, @intCast(match_offset)),
+        });
         return DecodeError.BadMatchOffset;
     };
 

@@ -40,16 +40,16 @@ inline fn frameType(magic: Frame.LZ4.Magic) DecodeError!Frame.Kind {
 
 fn headerChecksum(src: []const u8) u8 {
     const hash = Hasher.hash(0, src);
-    return @truncate(u8, hash >> 8);
+    return @truncate(hash >> 8);
 }
 
 fn readLZ4Header(reader: anytype, comptime verify_checksums: bool) !Frame.LZ4.Header {
-    const descriptor = @bitCast(Frame.LZ4.Header.Descriptor, try reader.readByte());
+    const descriptor: Frame.LZ4.Header.Descriptor = @bitCast(try reader.readByte());
     if (descriptor._reserved) return DecodeError.ReservedBitSet;
     if (descriptor.version != 1) return DecodeError.InvalidVersion;
     if (descriptor.dict_id) return DecodeError.DictionaryUnsupported;
 
-    const block_descriptor = @bitCast(Frame.LZ4.Header.BlockDescriptor, try reader.readByte());
+    const block_descriptor: Frame.LZ4.Header.BlockDescriptor = @bitCast(try reader.readByte());
     if (block_descriptor._reserved1 or block_descriptor._reserved2 != 0) {
         return DecodeError.ReservedBitSet;
     }
@@ -63,8 +63,8 @@ fn readLZ4Header(reader: anytype, comptime verify_checksums: bool) !Frame.LZ4.He
     if (verify_checksums) {
         var header_len: usize = 2;
         var potential_header_bytes: [14]u8 = undefined;
-        potential_header_bytes[0] = @bitCast(u8, descriptor);
-        potential_header_bytes[1] = @bitCast(u8, block_descriptor);
+        potential_header_bytes[0] = @bitCast(descriptor);
+        potential_header_bytes[1] = @bitCast(block_descriptor);
         // TODO: lower @memcpy to a for loop because the source or destination iterable is a tuple
         if (descriptor.content_size) {
             header_len += @sizeOf(u64);

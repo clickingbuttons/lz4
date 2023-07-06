@@ -56,7 +56,7 @@ pub fn DecompressStream(
             if (buffer.len > len) {
                 self.data = frame.decodeFrame(self.allocator, self.source, options.verify_checksums) catch |err| {
                     if (err == error.EndOfStream) return len;
-                    return @errSetCast(Error, err);
+                    return @as(Error, @errSetCast(err));
                 };
                 return try self.read(buffer[len..]);
             }
