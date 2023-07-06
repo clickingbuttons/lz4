@@ -54,14 +54,6 @@ test "extended length" {
     try std.testing.expectEqual(@as(usize, 15), try testReadLength(15, &[_]u8{0}));
 }
 
-inline fn wildMemcpy(dest: []u8, src: []u8) void {
-    // Needed because @memcpy cannot alias.
-    std.debug.assert(dest.len == src.len);
-    for (0..src.len) |i| {
-        dest[i] = src[i];
-    }
-}
-
 fn decodeBlockStream(dest: *std.ArrayList(u8), reader: anytype) !void {
     const token = try reader.readStruct(Token);
     log.debug("token {any}", .{token});
@@ -106,7 +98,7 @@ fn decodeBlockStream(dest: *std.ArrayList(u8), reader: anytype) !void {
         return DecodeError.BadMatchLen;
     }
 
-    wildMemcpy(dest.items[old_len2 .. old_len2 + len], dest.items[abs_offset .. abs_offset + len]);
+    std.mem.copyForwards(u8, dest.items[old_len2 .. old_len2 + len], dest.items[abs_offset .. abs_offset + len]);
 }
 
 pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
