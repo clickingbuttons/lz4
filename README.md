@@ -1,5 +1,8 @@
 # lz4
 
+![tests](https://github.com/clickingbuttons/lz4/actions/workflows/test.yml/badge.svg)
+[![docs](https://github.com/clickingbuttons/lz4/actions/workflows/publish_docs.yml/badge.svg)](https://clickingbuttons.github.io/lz4)
+
 Implementation of LZ4 decompression for
 [block](https://github.com/lz4/lz4/blob/dev/doc/lz4_Block_format.md) and
 [frame](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md) formats in Zig. Added reader
