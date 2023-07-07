@@ -2,3 +2,6 @@ zig-cache
 zig-out
 .gdb_history
 docs
+# Needed until -fno-emit-bin is fixed
+*.a
+*.o

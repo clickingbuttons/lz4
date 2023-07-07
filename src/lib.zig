@@ -1,12 +1,8 @@
-const block = @import("./decode/block.zig");
-const frame = @import("./decode/frame.zig");
+pub const block = @import("./decode/block.zig");
+pub const frame = @import("./decode/frame.zig");
 const decompress = @import("./decompress.zig");
 
 pub const decompressStream = decompress.decompressStream;
-
-pub const decodeFrame = frame.decodeFrame;
-pub const decodeBlock = block.decodeBlock;
-pub const decodeBlockArrayList = block.decodeBlockArrayList;
 
 test {
     _ = @import("./decode/block.zig");

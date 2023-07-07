@@ -1,6 +1,6 @@
 const std = @import("std");
-const decodeBlockArrayList = @import("./block.zig").decodeBlockArrayList;
-const Frame = @import("../types.zig").Frame;
+const decodeBlockArrayList = @import("./block.zig").decodeArrayList;
+pub const Frame = @import("../types.zig").Frame;
 const Allocator = std.mem.Allocator;
 
 const log = std.log.scoped(.lz4_frame);
@@ -171,8 +171,8 @@ fn readDataBlock(
     return res;
 }
 
-/// Decodes a LZ4 frame into its data. Caller owns returned slice.
-pub fn decodeFrame(allocator: Allocator, reader: anytype, comptime verify_checksums: bool) ![]u8 {
+/// Decodes a LZ4 frame into its data using allocator. Caller owns returned slice.
+pub fn decode(allocator: Allocator, reader: anytype, comptime verify_checksums: bool) ![]u8 {
     switch (try readFrameHeader(reader, verify_checksums)) {
         .skippable => |header| {
             try reader.skipBytes(header.frame_size, .{});
@@ -220,7 +220,7 @@ test "read compressed frame" {
 
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
-    const decompressed = try decodeFrame(allocator, reader, true);
+    const decompressed = try decode(allocator, reader, true);
     defer allocator.free(decompressed);
 
     try std.testing.expectEqualSlices(u8, expected, decompressed);
@@ -241,7 +241,7 @@ test "read two frames" {
 
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
-    const decompressed = try decodeFrame(allocator, reader, true);
+    const decompressed = try decode(allocator, reader, true);
     defer allocator.free(decompressed);
 
     try std.testing.expectEqualSlices(u8, expected, decompressed);
@@ -259,5 +259,5 @@ test "bad frames don't leak memory" {
 
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
-    try std.testing.expectError(error.BadMatchOffset, decodeFrame(allocator, reader, true));
+    try std.testing.expectError(error.BadMatchOffset, decode(allocator, reader, true));
 }

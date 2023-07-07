@@ -50,7 +50,7 @@ pub fn DecompressStream(
             }
 
             if (buffer.len > len) {
-                self.data = frame.decodeFrame(self.allocator, self.source, verify_checksums) catch |err| {
+                self.data = frame.decode(self.allocator, self.source, verify_checksums) catch |err| {
                     if (err == error.EndOfStream) return len;
                     return @as(Error, @errSetCast(err));
                 };

@@ -68,7 +68,7 @@ const lz4 = @import("lz4");
 const allocator = std.heap.page_allocator;
 const compressed = "\xf7\x12this is longer than 15 characters\x0b\x00";
 
-const decoded = try lz4.decodeBlock(allocator, compressed);
+const decoded = try lz4.block.decode(allocator, compressed);
 defer allocator.free(decoded);
 std.log.debug("{s}\n", .{ decoded }); // this is longer than 15 characters characters
 ```
@@ -83,7 +83,7 @@ const lz4 = @import("lz4");
 const allocator = std.heap.page_allocator;
 var file = try std.fs.cwd().openFile("frame.lz4", .{});
 
-const decompressed = try lz4.decodeFrame(allocator, reader, true);
+const decompressed = try lz4.frame.decode(allocator, reader, true);
 defer allocator.free(decompressed);
 ```
 

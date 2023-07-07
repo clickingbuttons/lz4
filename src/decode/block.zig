@@ -101,8 +101,8 @@ fn decodeBlockStream(dest: *std.ArrayList(u8), reader: anytype) !void {
     std.mem.copyForwards(u8, dest.items[old_len2 .. old_len2 + len], dest.items[abs_offset .. abs_offset + len]);
 }
 
-/// Decodes an LZ4 block into its data. Caller owns returned slice.
-pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
+/// Decodes an LZ4 block into its data using allocator. Caller owns returned slice.
+pub fn decode(allocator: Allocator, src: []const u8) ![]u8 {
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
 
@@ -115,7 +115,7 @@ pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
 }
 
 /// Decodes an LZ4 block into *std.ArrayList(u8). Returns the number of decoded bytes.
-pub fn decodeBlockArrayList(dest: *std.ArrayList(u8), src: []const u8) !usize {
+pub fn decodeArrayList(dest: *std.ArrayList(u8), src: []const u8) !usize {
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
 
@@ -129,7 +129,7 @@ fn testBlock(compressed: []const u8, comptime expected: []const u8) !void {
     // var allocator = std.heap.FixedBufferAllocator.init(dest);
     var allocator = std.testing.allocator;
 
-    const decoded = try decodeBlock(allocator, compressed);
+    const decoded = try decode(allocator, compressed);
     defer allocator.free(decoded);
 
     try std.testing.expectEqualSlices(u8, expected, decoded);
@@ -175,9 +175,9 @@ test "multiple blocks" {
 }
 
 test "garbage input" {
-    try std.testing.expectError(DecodeError.BadMatchOffset, decodeBlock(std.testing.allocator, "Hello there"));
+    try std.testing.expectError(DecodeError.BadMatchOffset, decode(std.testing.allocator, "Hello there"));
 }
 
 test "input ends prematurely" {
-    try std.testing.expectError(DecodeError.PrematureEnd, decodeBlock(std.testing.allocator, "\x90Not 9"));
+    try std.testing.expectError(DecodeError.PrematureEnd, decode(std.testing.allocator, "\x90Not 9"));
 }
