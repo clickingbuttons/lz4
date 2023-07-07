@@ -5,31 +5,29 @@ Implementation of LZ4 decompression for
 [frame](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md) formats in Zig. Added reader
 type makes decoding streams easy.
 
-Last built with zig@0.11.0-dev.3937+78eb3c561 on 2023-07-06.
-
 ## Installation
 
 `build.zig.zon`
 ```zig
 .{
-	.name = "yourProject",
-	.version = "0.0.1",
+    .name = "yourProject",
+    .version = "0.0.1",
 
-	.dependencies = .{
-		.lz4 = .{
-			.url = "https://github.com/clickingbuttons/lz4/archive/refs/heads/master.tar.gz",
-		},
-	},
+    .dependencies = .{
+        .lz4 = .{
+            .url = "https://github.com/clickingbuttons/lz4/archive/refs/heads/master.tar.gz",
+        },
+    },
 }
 ```
 
 `build.zig`
 ```zig
-	const lz4 = b.dependency("lz4", .{
-		.target = target,
-		.optimize = optimize,
-	});
-	exe.addModule("lz4", lz4.module("lz4"));
+const lz4 = b.dependency("lz4", .{
+    .target = target,
+    .optimize = optimize,
+});
+exe.addModule("lz4", lz4.module("lz4"));
 ```
 
 Run `zig build` and then copy the expected hash into `build.zig.zon`.
