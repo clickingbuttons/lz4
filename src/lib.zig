@@ -3,7 +3,6 @@ const frame = @import("./decode/frame.zig");
 const decompress = @import("./decompress.zig");
 
 pub const decompressStream = decompress.decompressStream;
-pub const decompressStreamOptions = decompress.decompressStreamOptions;
 
 pub const decodeFrame = frame.decodeFrame;
 pub const decodeBlock = block.decodeBlock;

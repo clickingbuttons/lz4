@@ -101,6 +101,7 @@ fn decodeBlockStream(dest: *std.ArrayList(u8), reader: anytype) !void {
     std.mem.copyForwards(u8, dest.items[old_len2 .. old_len2 + len], dest.items[abs_offset .. abs_offset + len]);
 }
 
+/// Decodes an LZ4 block into its data. Caller owns returned slice.
 pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
@@ -108,20 +109,17 @@ pub fn decodeBlock(allocator: Allocator, src: []const u8) ![]u8 {
     var dest = std.ArrayList(u8).init(allocator);
     errdefer dest.deinit();
 
-    while (reader.context.pos < src.len) {
-        try decodeBlockStream(&dest, reader);
-    }
+    while (reader.context.pos < src.len) try decodeBlockStream(&dest, reader);
 
     return dest.toOwnedSlice();
 }
 
+/// Decodes an LZ4 block into *std.ArrayList(u8). Returns the number of decoded bytes.
 pub fn decodeBlockArrayList(dest: *std.ArrayList(u8), src: []const u8) !usize {
     var stream = std.io.fixedBufferStream(src);
     var reader = stream.reader();
 
-    while (reader.context.pos < src.len) {
-        try decodeBlockStream(dest, reader);
-    }
+    while (reader.context.pos < src.len) try decodeBlockStream(dest, reader);
 
     return dest.items.len;
 }

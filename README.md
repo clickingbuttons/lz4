@@ -46,7 +46,7 @@ const lz4 = @import("lz4");
 const allocator = std.heap.page_allocator;
 var file = try std.fs.cwd().openFile("file.lz4", .{});
 
-var stream = lz4.decompressStream(allocator, file.reader());
+var stream = lz4.decompressStream(allocator, file.reader(), true);
 defer stream.deinit();
 var reader = stream.reader();
 

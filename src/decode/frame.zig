@@ -171,6 +171,7 @@ fn readDataBlock(
     return res;
 }
 
+/// Decodes a LZ4 frame into its data. Caller owns returned slice.
 pub fn decodeFrame(allocator: Allocator, reader: anytype, comptime verify_checksums: bool) ![]u8 {
     switch (try readFrameHeader(reader, verify_checksums)) {
         .skippable => |header| {

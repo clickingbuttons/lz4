@@ -4,13 +4,9 @@ const frame = @import("./decode/frame.zig");
 
 const log = std.log.scoped(.lz4_decompress);
 
-pub const DecompressStreamOptions = struct {
-    verify_checksums: bool = true,
-};
-
 pub fn DecompressStream(
     comptime ReaderType: type,
-    comptime options: DecompressStreamOptions,
+    comptime verify_checksums: bool,
 ) type {
     return struct {
         const Self = @This();
@@ -54,7 +50,7 @@ pub fn DecompressStream(
             }
 
             if (buffer.len > len) {
-                self.data = frame.decodeFrame(self.allocator, self.source, options.verify_checksums) catch |err| {
+                self.data = frame.decodeFrame(self.allocator, self.source, verify_checksums) catch |err| {
                     if (err == error.EndOfStream) return len;
                     return @as(Error, @errSetCast(err));
                 };
@@ -66,19 +62,12 @@ pub fn DecompressStream(
     };
 }
 
-pub fn decompressStreamOptions(
-    allocator: std.mem.Allocator,
-    reader: anytype,
-    comptime options: DecompressStreamOptions,
-) DecompressStream(@TypeOf(reader, options)) {
-    return DecompressStream(@TypeOf(reader), options).init(allocator, reader);
-}
-
 pub fn decompressStream(
     allocator: std.mem.Allocator,
     reader: anytype,
-) DecompressStream(@TypeOf(reader), .{}) {
-    return DecompressStream(@TypeOf(reader), .{}).init(allocator, reader);
+    comptime verify_checksums: bool,
+) DecompressStream(@TypeOf(reader), verify_checksums) {
+    return DecompressStream(@TypeOf(reader), verify_checksums).init(allocator, reader);
 }
 
 fn testDecompress(comptime fname: []const u8) !void {
@@ -88,7 +77,7 @@ fn testDecompress(comptime fname: []const u8) !void {
 
     var file = try std.fs.cwd().openFile(fname ++ ".lz4", .{});
     var reader = file.reader();
-    var stream = decompressStream(std.testing.allocator, reader);
+    var stream = decompressStream(std.testing.allocator, reader, true);
     defer stream.deinit();
     var lz4reader = stream.reader();
     var buf: []u8 = try allocator.alloc(u8, expected.len * 4);
