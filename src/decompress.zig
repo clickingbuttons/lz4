@@ -62,6 +62,7 @@ pub fn DecompressStream(
     };
 }
 
+/// Returns a struct that implements a Reader interface for a stream of LZ4 frames.
 pub fn decompressStream(
     allocator: std.mem.Allocator,
     reader: anytype,
